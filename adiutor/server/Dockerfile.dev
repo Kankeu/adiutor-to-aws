@@ -1,0 +1,22 @@
+# Use official Python image
+FROM python:3.10
+
+# Set the working directory inside the container
+WORKDIR /server
+
+# Copy the requirements file and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the FastAPI application files
+RUN mkdir ./src
+COPY src/app.py ./src
+COPY src/__init__.py ./src
+COPY src/llm ./src/llm
+COPY src/web_search ./src/web_search
+
+# Expose port 8000
+EXPOSE 8000
+
+# Run FastAPI application
+CMD ["fastapi", "dev", "src/app.py", "--host", "0.0.0.0", "--port", "8000"]

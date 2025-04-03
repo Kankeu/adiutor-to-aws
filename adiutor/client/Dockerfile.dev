@@ -1,0 +1,12 @@
+# Base image
+FROM node:lts-alpine
+
+WORKDIR /client
+
+COPY . .
+
+# Install dependencies
+RUN npm install
+
+# Start dev server
+CMD ["npm", "run", "dev", "--", "--host","0.0.0.0", "--port", "8080"]
