@@ -1,8 +1,17 @@
 import {defineStore} from 'pinia'
 import {nextTick, reactive} from "vue";
+import type {Message, OnMessage, WebSearch, Settings} from '@/types/types'
+
+
+
+type StateType = {
+    web_search: WebSearch
+    messages:Message[]
+    _onMessage: OnMessage | null
+}
 
 export const useChat = defineStore('chat', {
-    state: () => ({
+    state: () => (<StateType>{
         web_search: {current: null,sources:[]},
         _onMessage: null,
         messages: [],
@@ -19,7 +28,7 @@ export const useChat = defineStore('chat', {
         },
     },
     actions: {
-        addMessage(message) {
+        addMessage(message:Message) {
             const i = this.messages.findIndex(m => m.id == message.id)
             if (i >= 0) {
                 this.messages.splice(i, 1)
@@ -36,24 +45,24 @@ export const useChat = defineStore('chat', {
                 })
             }
         },
-        findMessage(id) {
+        findMessage(id:number) {
             const i = this.messages.findIndex(m => m.id == id)
             return i >= 0 ? this.messages[i] : null
         },
-        onMessage(onMessage) {
+        onMessage(onMessage:OnMessage) {
             this._onMessage = onMessage
         },
-        removeMessage(id) {
+        removeMessage(id:number) {
             const i = this.messages.findIndex(m => m.id == id)
             if (i >= 0) this.messages.splice(i, 1)
         },
         clearMessages() {
             this.messages = []
         },
-        setSettings(settings) {
+        setSettings(settings: Settings) {
             localStorage.setItem('settings', JSON.stringify(settings));
         },
-        updateWebSearch(web_search){
+        updateWebSearch(web_search: WebSearch){
             this.web_search = {...this.web_search,...web_search}
         }
     },

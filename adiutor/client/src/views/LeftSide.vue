@@ -1,39 +1,40 @@
-<script lang="ts">
-import { Search, Link, InfoFilled, HomeFilled, Delete } from '@element-plus/icons-vue'
+<script setup lang="ts">
+import { storeToRefs } from 'pinia';
+import { getCurrentInstance } from 'vue'
+import { Search, InfoFilled, HomeFilled } from '@element-plus/icons-vue'
 import SettingDialog from "@/components/setting/SettingDialog.vue";
-import Mute from "@/components/message/Mute.vue";
 import AddWebPage from '@/components/web_search/AddWebPage.vue';
+import { useWebSearch } from '@/stores/web_search';
+import { useChat } from '@/stores/chat';
+import WebPages from '@/components/web_search/WebPages.vue';
 
-export default {
-  computed: {
-    Delete() {
-      return Delete
-    }
+const chat = useChat()
+const webSearch = useWebSearch()
+const { webPages } = storeToRefs(webSearch)
+
+const vm = getCurrentInstance()
+const proxy = vm?.proxy as any
+
+
+const features = [
+  {
+    "icon": HomeFilled,
+    "id": null,
+    "name": "Welcome",
   },
-  components: { Mute, Search, Link, InfoFilled, HomeFilled, SettingDialog, AddWebPage },
-  data: () => ({
-    features: [
-      {
-        "icon": HomeFilled,
-        "id": null,
-        "name": "Welcome",
-      },
-      {
-        "icon": Search,
-        "id": "web_search",
-        "name": "Web Search",
-        "description": "Perform web searches using RAG."
-      },
-    ]
-  }),
-  methods: {
-    navigate(f) {
-      if (f.id) {
-        this.pushQuery({ feature: f.id })
-      } else {
-        this.popQuery('feature')
-      }
-    }
+  {
+    "icon": Search,
+    "id": "web_search",
+    "name": "Web Search",
+    "description": "Perform web searches using RAG."
+  },
+]
+
+function navigate(f) {
+  if (f.id) {
+    proxy.pushQuery({ feature: f.id })
+  } else {
+    proxy.popQuery('feature')
   }
 }
 </script>
@@ -69,6 +70,19 @@ export default {
           </el-space>
         </el-card>
         <AddWebPage></AddWebPage>
+        <el-divider></el-divider>
+        <WebPages></WebPages>
+        <el-card v-if="false" v-for="domain in new Set(webPages.map(wp => wp.domain))" :key="domain" shadow="hover"
+          :style="{ cursor: 'pointer', marginBottom: '.75em', border: '1px solid var(--el-border-color)', opacity: !!$route.query.web_search ? .6 : 1, ...($route.query.web_search ? { opacity: 1, borderColor: 'blue', borderLeftWidth: '3px' } : {}) }">
+          <div slot="header" class="clearfix" style="font-size: 16px;width: 100%;text-align: left">
+            <span>{{ toEllipsis(domain, 30) }}</span>
+            <el-button style="float: right; padding: 3px 0" type="text">Operation button</el-button>
+          </div>
+          <div v-for="webPage in webPages.filter(wp => wp.domain == domain)" :key="webPage.id" class="text item"
+            @click.prevent.stop="chat.updateWebSearch({ current: webPage.url, sources: [] })">
+            {{ toEllipsis(webPage.url, 30) }}
+          </div>
+        </el-card>
       </el-scrollbar>
       <el-divider></el-divider>
       <el-image style="padding-left: .5em;padding-right: .5em;" src="/images/defaults/rptu-h.png"></el-image>

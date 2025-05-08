@@ -4,6 +4,7 @@ import {useChat} from "@/stores/chat";
 import {speak} from "@/mixins/Global";
 import {default as http,HttpExecutor} from "@/http/http"
 import StreamingJsonParser from "@/utils/StreamingJsonParser"
+import type { Message } from '@/types/types';
 
 class ChatRepository{
     stopped = false
@@ -19,7 +20,7 @@ class ChatRepository{
         const chat = useChat()
         const settings = chat.settings()
         chat.addMessage({...data,id:Date.now()})
-        const loading_msg = {id:Date.now()+1,loading:true}
+        const loading_msg:Message = {id:Date.now()+1,loading:true}
         chat.addMessage(loading_msg)
         const parser = new StreamingJsonParser()
         try{
@@ -93,13 +94,9 @@ class ChatRepository{
             chat.updateWebSearch({current:sources.length ? sources[0].url : null, sources:sources})
             return [metaRawData,chunkValue.payload,null]
         }
-        /*
-        if (chunkValue.payload?.sources!=null) {
-            metaData = chunkValue.payload
-        } else {*/
+  
         if(metaData && chunkValue.type=="web_search"){
             chat.removeMessage(loading_msg.id)
-            //console.log("metadata",chunkValue,metaData)
             const sources = metaData.sources
             let reply = message.text + chunkValue.payload.response
             for (let i=0; i<sources.length; i++){
@@ -112,17 +109,53 @@ class ChatRepository{
             console.log(message)
             chat.addMessage({...message,...metaData})
         }
-        //}
         return [metaRawData,metaData,null]
     }
 
-    async index(form){
+
+    async index(form:any){
         try{
             const executor = http.post("api/index",form)
             const res = await executor.execute()
-            const payload = await res.json()
+            const data = await res.json()
             const webSearch = useWebSearch()
-            webSearch.addWebSite(payload)
+            webSearch.setWebPages(data.payload)
+        }catch (e){
+            console.error(e)
+            ElNotification({
+                title: 'Oops something went wrong!!!',
+                message: String(e),
+                type: 'error',
+                duration: 9000
+            })
+        }
+    }
+
+    async getWebPages(){
+        try{
+            const executor = http.get("api/web_pages")
+            const res = await executor.execute()
+            const data = await res.json()
+            const webSearch = useWebSearch()
+            webSearch.setWebPages(data.payload)
+        }catch (e){
+            console.error(e)
+            ElNotification({
+                title: 'Oops something went wrong!!!',
+                message: String(e),
+                type: 'error',
+                duration: 9000
+            })
+        }
+    }
+
+    async deleteWebPages(form:any){
+        try{
+            const executor = http.post("api/web_pages/delete", form)
+            const res = await executor.execute()
+            const data = await res.json()
+            const webSearch = useWebSearch()
+            webSearch.setWebPages(data.payload)
         }catch (e){
             console.error(e)
             ElNotification({

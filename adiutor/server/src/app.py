@@ -1,15 +1,19 @@
 import os
-
+from typing import List
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from mangum import Mangum
 from pydantic import BaseModel, HttpUrl
-
+from .database import StoreManager, WebPage
 from .llm.llm_api import LLMAPI
 from .web_search import WebSearch
 
 app = FastAPI()
+
+# Initialize the sqlite and vector database
+store_manager = StoreManager()
+store_manager.load()
 
 BACKEND_ENV = os.environ.get("BACKEND_ENV",None)
 IS_PROD = BACKEND_ENV=="prod"
@@ -30,9 +34,7 @@ handler = Mangum(app)
 # API Token of LLM
 llm_api = LLMAPI()
 
-web_search = WebSearch(llm_api=llm_api)
-
-DISABLE_NEST_ASYNCIO=True
+web_search = WebSearch(llm_api=llm_api,store_manager=store_manager)
 
 class QueryReq(BaseModel):
     query: str 
@@ -42,13 +44,26 @@ class QueryReq(BaseModel):
 def query(data: QueryReq):
     return StreamingResponse(llm_api.iter_over_async(web_search.process(data.query,data.system_prompt)))
 
-class LinkReq(BaseModel):
+class IndexLink(BaseModel):
     url: HttpUrl
 
 @app.post("/api/index")
-def index(data: LinkReq):
-    return {"url": str(data.url), "graph": web_search.index(str(data.url))}
+def index(data: IndexLink):
+    return web_search.index(str(data.url))
+
+@app.get("/api/web_pages")
+def web_pages():
+    return {"status": "done", "payload": store_manager.db.query(WebPage).all()}
+
+class DeleteWebPage(BaseModel):
+    urls: List[str] = []
+    domains: List[str] = []
+    
+@app.post("/api/web_pages/delete")
+def web_pages(data: DeleteWebPage):
+    urls = frozenset(data.urls).union(frozenset(wp.url for wp in store_manager.db.query(WebPage).filter(WebPage.domain.in_(data.domains)).all()))
+    return web_search.delete(urls)
 
 @app.get("/api/config")
 def config():
-    return {"version": "0.0.1"}
+    return {"version": "0.0.2"}

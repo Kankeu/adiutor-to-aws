@@ -8,7 +8,7 @@ import chatRepository from "@/repositories/ChatRepository"
 import {useWebSearch} from "@/stores/web_search"
 
 const webSearch = useWebSearch()
-const {webSite} = storeToRefs(webSearch)
+const {webPages} = storeToRefs(webSearch)
 
 const loading = ref(false)
 const recording = ref(false)
@@ -65,13 +65,13 @@ if(SpeechRecognition){
       class="w-50 m-2"
       size="large"
       clearable
-      :disabled="!$route.query.feature || !webSite?.url || loading"
-      :placeholder="recording ? 'Listening...': (webSite?.url ? 'Search in web' : 'Enter a web page first!')"
+      :disabled="!$route.query.feature || !webPages.length || loading"
+      :placeholder="recording ? 'Listening...': (webPages.length ? 'Search in web' : 'Enter a web page first!')"
       :prefix-icon="Search"
   >
     <template #suffix>
       <el-button @click="chatRepository.stop()" v-if="loading" type="danger" size="small" circle :icon="Close"></el-button>
-      <el-button @click="record" :type="recording ? 'success' : 'primary'" :size="recording ? 'default' : 'small'" :icon="Microphone" circle :disabled="!$route.query.feature || !webSite?.url || !SpeechRecognition" v-else/>
+      <el-button @click="record" :type="recording ? 'success' : 'primary'" :size="recording ? 'default' : 'small'" :icon="Microphone" circle :disabled="!$route.query.feature || !webPages?.length || !SpeechRecognition" v-else/>
     </template>
   </el-input>
 </template>

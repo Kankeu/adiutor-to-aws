@@ -1,41 +1,22 @@
+from typing import FrozenSet
 import datetime
-import os
-
-
 import json
-import shutil
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langdetect import detect
-from denspa import VectorSearch
+
 from .web_scraper import WebScraper
-
-BUCKET_NAME = os.environ.get("BUCKET_NAME",None)
-BACKEND_ENV = os.environ.get("BACKEND_ENV",None)
-IS_PROD = BACKEND_ENV=="prod"
-if IS_PROD:
-    import boto3
-    from langchain_aws import BedrockEmbeddings
-
-    s3 = boto3.client("s3")
-    bedrock = boto3.client(service_name="bedrock-runtime")
-    INDEX_PATH = "/tmp/database/index"
-    EMBEDDING_FUNCTION = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0",client=bedrock)
-else:
-    s3 = None
-    EMBEDDING_FUNCTION = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-    INDEX_PATH = "database/index"
-INDEX_NAME = "denspa"
+from ..database import StoreManager, WebPage
+from ..utils import extract_domain
 
 class WebSearch:
 
 
-    def __init__(self,llm_api):
+    def __init__(self,llm_api, store_manager: StoreManager):
         self.llm_api = llm_api
         self.web_scraper = WebScraper(max_breath=3,max_depth=2)
-        self.denspa = None
+        self.store_manager = store_manager
         self.start_url = None
         self.max_context_len = int(4096*3.5)
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -95,11 +76,13 @@ Text: ```{context}```
 Summary:
 """
     
-    def index(self,start_url):
-        self.load_denspa()
-
-        nodes,edges = self.web_scraper.recursively_scrape(start_url=start_url)
-        md_splits = [Document(page_content=md_split.page_content,metadata=node.metadata | {"headers":md_split.metadata}) for node in nodes.values() for md_split in self.markdown_splitter.split_text(node.page_content)]
+    def index(self, start_url: str):
+        
+        indexed_urls = frozenset(wp.url for wp in self.store_manager.db.query(WebPage).filter(WebPage.domain == extract_domain(start_url)).all())
+        
+        nodes,_ = self.web_scraper.recursively_scrape(start_url=start_url, skip_urls=indexed_urls)
+            
+        md_splits = [Document(page_content=md_split.page_content,metadata={"url":node.metadata["url"],"title":node.metadata["title"]}) for node in nodes.values() for md_split in self.markdown_splitter.split_text(node.page_content)]
 
         splits = self.text_splitter.split_documents(md_splits)
         try:
@@ -108,32 +91,45 @@ Summary:
             lang = "en"
 
         # Indexing with FAISS
-        self.denspa.add_documents(splits, lang=lang, engine="faiss")
+        self.store_manager.denspa.add_documents(splits, lang=lang, engine="faiss")
 
         # Indexing with BM25
-        self.denspa.add_documents(splits, lang=lang, engine="bm25")
+        self.store_manager.denspa.add_documents(splits, lang=lang, engine="bm25")
 
-        # Save the index locally
-        self.save_denspa()
+        # Add the web pages in the database
+        for node in nodes.values():
+            self.store_manager.db.add(WebPage(domain=node.metadata["domain"], url=node.metadata["url"], title=node.metadata["title"], html=node.metadata["html"]))
+        
+        # Save the index and db locally/s3
+        self.store_manager.save()
+        
+        return {"status":"done", "payload": self.store_manager.db.query(WebPage).all()}
 
-        return {"nodes":nodes,"edges":edges}
+    def delete(self, urls: FrozenSet[str]):
 
+        for url in urls:
+            self.store_manager.denspa.removeByMetadata({"url": url})
+        
+        self.store_manager.db.query(WebPage).filter(WebPage.url.in_(urls)).delete(synchronize_session=False)
+        self.store_manager.save()
+
+        return {"status":"done", "payload": self.store_manager.db.query(WebPage).all()}
+    
     async def process(self,query,system_prompt):
-        self.load_denspa()
 
         try:
             lang = self.locales.get(detect(query))
         except:
             lang = "en"
 
-        results = self.denspa.similarity_search_with_score(
+        results = self.store_manager.denspa.similarity_search_with_score(
             query=query,
             k=10,
-            method="cascade",
+            method="faiss",
             lang=lang
         )
 
-        sources = [dict(id=i,url=r[0].metadata["url"],title=r[0].metadata["title"],text=r[0].page_content,score=float(r[1])) for i,r in enumerate(results)]
+        sources = [dict(id=f"WSD-#{i+1}",url=r[0].metadata["url"],title=r[0].metadata["title"],text=r[0].page_content,score=float(r[1])) for i,r in enumerate(results)]
         yield json.dumps({"status":"ok","type":"metadata","payload":{"cost": round(len((" ".join(r[0].page_content for r in results)).split()) / 10), "sources": sources}})
         context = ""
         for i,res in enumerate(results):
@@ -152,43 +148,3 @@ Page content: {summary}
         yield json.dumps({"status":"ok","type":"web_search","payload":{"response":response}})
 
         yield json.dumps({"status":"done","type":"web_search","payload":None})
-
-
-    def load_denspa(self):
-        if self.denspa is not None:
-            return self.denspa
-
-        if os.path.exists(INDEX_PATH):
-            shutil.rmtree(INDEX_PATH)
-        os.makedirs(INDEX_PATH)
-
-        if IS_PROD:
-            self.load_denspa_from_s3(INDEX_PATH, INDEX_NAME)
-
-        self.denspa = VectorSearch(
-            folder_path=INDEX_PATH,
-            index_name=INDEX_NAME,
-            embedding_function=EMBEDDING_FUNCTION,
-            bm25_options={"k1": 1.25, "b": 0}
-        )
-
-    def save_denspa(self):
-        self.denspa.save_local()
-
-        if IS_PROD:
-            self.save_denspa_to_s3(INDEX_PATH, INDEX_NAME)
-
-    def save_denspa_to_s3(self, folder_path, key):
-        try:
-            for ext in [".faiss",".pkl",".bm25.index.pkl",".bm25.doc_store.pkl"]:
-                s3.upload_file(Bucket=BUCKET_NAME, Key=key+ext, Filename=f"{folder_path}/{key}{ext}")
-        except Exception as e:
-            print(f"save_denspa_to_s3",e)
-
-
-    def load_denspa_from_s3(self, folder_path, key):
-        try:
-            for ext in [".faiss",".pkl",".bm25.index.pkl",".bm25.doc_store.pkl"]:
-                s3.download_file(Bucket=BUCKET_NAME, Key=key+ext, Filename=f"{folder_path}/{key}{ext}")
-        except Exception as e:
-            print("load_denspa_from_s3",e)

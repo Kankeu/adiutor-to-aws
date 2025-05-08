@@ -18,6 +18,6 @@ async def crawl(urls):
     await crawler.start()
     for url in urls:
         result = await crawler.arun(url)
-        results[url] = {"metadata": result.metadata, "markdown":result.markdown.raw_markdown, "links":result.links,"pdf":result.pdf}
+        results[url] = {"metadata": result.metadata,"html": result.html, "markdown":result.markdown.raw_markdown, "links":result.links,"pdf":result.pdf}
     await crawler.close()
     return results
