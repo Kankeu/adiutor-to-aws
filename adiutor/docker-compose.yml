@@ -9,6 +9,11 @@ services:
       - ./server:/app
     environment:
       - BACKEND_ENV=dev
+      - CRAWL4AI_API_URL=http://crawl4ai:11235
+      - CRAWL4AI_API_TOKEN=wSTk2mirJ3dU7Psw2hY%mE@mNwWcWf19
+      - OPENAI_API_KEY=
+    depends_on:
+      - crawl4ai
     restart: no
 
   frontend:
@@ -24,4 +29,12 @@ services:
       - ./client:/app
     depends_on:
       - backend
+    restart: no
+
+  crawl4ai:
+    image: unclecode/crawl4ai:basic-amd64
+    ports:
+      - 11235:11235
+    environment:
+      - CRAWL4AI_API_TOKEN=wSTk2mirJ3dU7Psw2hY%mE@mNwWcWf19
     restart: no

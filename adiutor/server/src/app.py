@@ -44,12 +44,13 @@ class QueryReq(BaseModel):
 def query(data: QueryReq):
     return StreamingResponse(llm_api.iter_over_async(web_search.process(data.query,data.system_prompt)))
 
-class IndexLink(BaseModel):
+class IndexReq(BaseModel):
     url: HttpUrl
+    fast: bool = True
 
 @app.post("/api/index")
-def index(data: IndexLink):
-    return web_search.index(str(data.url))
+def index(data: IndexReq):
+    return web_search.index(str(data.url),fast=data.fast)
 
 @app.get("/api/web_pages")
 def web_pages():

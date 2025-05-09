@@ -76,13 +76,13 @@ Text: ```{context}```
 Summary:
 """
     
-    def index(self, start_url: str):
+    def index(self, start_url: str, fast: bool = True):
         
         indexed_urls = frozenset(wp.url for wp in self.store_manager.db.query(WebPage).filter(WebPage.domain == extract_domain(start_url)).all())
         
-        nodes,_ = self.web_scraper.recursively_scrape(start_url=start_url, skip_urls=indexed_urls)
-            
-        md_splits = [Document(page_content=md_split.page_content,metadata={"url":node.metadata["url"],"title":node.metadata["title"]}) for node in nodes.values() for md_split in self.markdown_splitter.split_text(node.page_content)]
+        nodes,_ = self.web_scraper.recursively_scrape(start_url=start_url, skip_urls=indexed_urls,fast=fast)
+
+        md_splits = [Document(page_content=md_split.page_content,metadata={"url":node.metadata["url"],"title":node.metadata["title"],"headers":md_split.metadata}) for node in nodes.values() for md_split in self.markdown_splitter.split_text(node.page_content)]
 
         splits = self.text_splitter.split_documents(md_splits)
         try:
@@ -125,14 +125,16 @@ Summary:
         results = self.store_manager.denspa.similarity_search_with_score(
             query=query,
             k=10,
-            method="faiss",
+            method="cascade",
             lang=lang
         )
 
         sources = [dict(id=f"WSD-#{i+1}",url=r[0].metadata["url"],title=r[0].metadata["title"],text=r[0].page_content,score=float(r[1])) for i,r in enumerate(results)]
         yield json.dumps({"status":"ok","type":"metadata","payload":{"cost": round(len((" ".join(r[0].page_content for r in results)).split()) / 10), "sources": sources}})
+        
         context = ""
         for i,res in enumerate(results):
+            
             # Model context is limited
             if len(context) > self.max_context_len:
                 continue

@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Text
 
 from .database import Base
@@ -11,5 +11,5 @@ class WebPage(Base):
     url = Column(String, unique=True, index=True)
     title = Column(String)
     html = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC))
-    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.UTC), onupdate=lambda: datetime.datetime.now(datetime.UTC))
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=lambda: datetime.now(datetime.utc))

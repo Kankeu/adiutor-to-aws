@@ -1,6 +1,6 @@
 # Adiutor  
 
-Adiutor is a lightweight web application that transforms websites into searchable knowledge bases for RAG-based chat systems. It is built with **OpenAI** (`gpt-3.5-turbo-1106`), **Crawl4AI**, **AWS Lambda**, **S3 Bucket**, and **Bedrock** (`amazon.titan-embed-text-v2:0`) for production use.
+Adiutor is a lightweight web application that transforms websites into searchable knowledge bases for RAG-based chat systems. It is built with **OpenAI** (`gpt-4.1-nano-2025-04-14`), **Crawl4AI**, **AWS Lambda**, **S3 Bucket**, and **Bedrock** (`amazon.titan-embed-text-v2:0`) for production use.
 
 ## 🚀 Getting Started  
 
