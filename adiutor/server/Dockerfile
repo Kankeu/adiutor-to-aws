@@ -11,4 +11,6 @@ RUN mkdir ${LAMBDA_TASK_ROOT}/src
 COPY src/app.py ${LAMBDA_TASK_ROOT}/src
 COPY src/__init__.py ${LAMBDA_TASK_ROOT}/src
 COPY src/llm ${LAMBDA_TASK_ROOT}/src/llm
+COPY src/utils ${LAMBDA_TASK_ROOT}/src/utils
+COPY src/database ${LAMBDA_TASK_ROOT}/src/database
 COPY src/web_search ${LAMBDA_TASK_ROOT}/src/web_search
